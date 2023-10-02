@@ -191,6 +191,7 @@ int32_t mlx90632_i2c_read(int16_t register_address, uint16_t *value) {
         return -1; // Handle not found
     }
     */
+    /*
     uint8_t reg[2];
     reg[0] = (register_address >> 8) & 0xFF;
     reg[1] = register_address & 0xFF;
@@ -223,6 +224,96 @@ int32_t mlx90632_i2c_read(int16_t register_address, uint16_t *value) {
     //pthread_mutex_unlock(&i2c_mutex);
         // Close the I2C handle
     //close_i2c_bus(i2cHandle22);
+    */
+    /*
+      int i2cHandle22 = open_i2c_bus(23, 0x3A);
+    // Start condition
+      ioctl(i2cHandle22, I2C_SLAVE, 0x3A);
+
+      // Write slave address + write bit 
+      uint8_t slaveAddrWrite = 0x3A << 1;
+      write(i2cHandle22, &slaveAddrWrite, 1);
+
+      // Write register address
+      uint8_t reg[2] = {0x0B, 0x24};
+      write(i2cHandle22, reg, 2);
+
+      // Repeated start 
+      ioctl(i2cHandle22, I2C_SLAVE, 0x3A);
+
+      // Write slave address + read bit
+      uint8_t slaveAddrRead = (0x3A << 1) | 0x01;
+      write(i2cHandle22, &slaveAddrRead, 1);
+      usleep(10000);
+      // Read data
+      uint8_t data[2];
+      read(i2cHandle22, data, 2);
+        
+      // Process data
+      *value = (data[1] << 8) | data[0];
+      *value = swap_endian_16(*value);
+    */
+     uint8_t slaveAddr = 0x3A;
+  uint16_t defAddr = 0x3FFF; // Default start address
+  
+  int i2cHandle = open("/dev/i2c-24", O_RDWR);
+
+  if(i2cHandle < 0) {
+    // Error handling
+  }
+
+  // Start condition
+  ioctl(i2cHandle, I2C_SLAVE, slaveAddr);
+
+  // Send slave address + read bit
+  uint8_t slaveReadAddr = (slaveAddr << 1) | 0x01;
+  write(i2cHandle, &slaveReadAddr, 1);
+
+  // Read default address (2 bytes)
+  uint8_t defAddrBytes[2]; 
+  read(i2cHandle, defAddrBytes, 2);
+  
+  printf("Read bytes: 0x%02X 0x%02X\n", defAddrBytes[0], defAddrBytes[1]); 
+  
+  // Validate default address 
+  if(defAddrBytes[0] != (defAddr >> 8) ||
+     defAddrBytes[1] != (defAddr & 0xFF)) {
+     printf("Invalid default address!");
+     return 1;
+  }
+
+  // Incremental read
+  uint8_t readBytes[2]; 
+  uint16_t currAddr = defAddr;
+  
+  while(1) {
+
+    // Read 2 data bytes   
+    int rc = read(i2cHandle, readBytes, 2);  
+
+    // Check for errors
+    if(rc != 2) {
+      printf("Read failed");
+      break;
+    }
+
+    // Print bytes  
+    printf("Read addr 0x%04X: 0x%02X%02X\n", 
+           currAddr, readBytes[1], readBytes[0]); 
+
+    // Increment address
+    currAddr++;
+
+    // Check device status
+    if(readBytes[1] == 0x04) {
+      printf("Device busy!\n"); 
+      break;
+    }
+
+  }
+
+  close(i2cHandle);
+    
     return 0;
 }
 
